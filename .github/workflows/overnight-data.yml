@@ -1,0 +1,28 @@
+name: Build UK overnight database
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 4 * * 1'
+permissions:
+  contents: write
+concurrency:
+  group: overnight-data
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install osmium shapely
+      - run: |
+          curl --fail --retry 2 -L https://download.geofabrik.de/europe/great-britain-latest.osm.pbf -o /tmp/gb.pbf
+          sudo apt-get update && sudo apt-get install -y osmium-tool
+          osmium tags-filter /tmp/gb.pbf nwr/tourism=camp_site,caravan_site nwr/amenity=parking -o /tmp/filtered.pbf
+          python build.py /tmp/filtered.pbf overnight-data.json
+      - run: |
+          git config user.name 'overnight-data-bot'
+          git config user.email 'overnight-data-bot@users.noreply.github.com'
+          git add overnight-data.json
+          git commit -m 'Refresh UK overnight database' || exit 0
+          git push
